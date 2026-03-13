@@ -30,11 +30,22 @@ def test_inspect_claude_runtime_reads_local_files(tmp_path: Path, monkeypatch: p
     claude_dir = tmp_path / ".claude"
     claude_dir.mkdir()
     (claude_dir / "settings.json").write_text("{}", encoding="utf-8")
-    (claude_dir / "credentials.json").write_text("{}", encoding="utf-8")
+    (claude_dir / ".credentials.json").write_text("{}", encoding="utf-8")
 
     runtime = inspect_claude_runtime(home_dir=tmp_path)
     assert runtime.settings_file is not None
     assert runtime.credentials_configured is True
+    assert str(claude_dir / ".credentials.json") in runtime.credential_sources
+
+
+def test_inspect_claude_runtime_accepts_legacy_credentials_filename(tmp_path: Path) -> None:
+    claude_dir = tmp_path / ".claude"
+    claude_dir.mkdir()
+    (claude_dir / "credentials.json").write_text("{}", encoding="utf-8")
+
+    runtime = inspect_claude_runtime(home_dir=tmp_path)
+    assert runtime.credentials_configured is True
+    assert str(claude_dir / "credentials.json") in runtime.credential_sources
 
 
 def test_inspect_claude_runtime_does_not_treat_settings_file_as_credentials(tmp_path: Path) -> None:
@@ -103,6 +114,7 @@ def test_run_claude_cli_sets_permission_mode_and_model(monkeypatch: pytest.Monke
     claude_dir = home_dir / ".claude"
     claude_dir.mkdir(parents=True)
     (claude_dir / "settings.json").write_text("{}", encoding="utf-8")
+    (claude_dir / ".credentials.json").write_text("{}", encoding="utf-8")
     monkeypatch.setenv("HOME", str(home_dir))
 
     def fake_run(command, **kwargs):

@@ -93,6 +93,7 @@ _UNSUPPORTED_KWARG_MESSAGES = {
     "logprobs": "ClaudeLM does not expose logprobs.",
 }
 _COPIED_CLAUDE_FILES = (
+    ".credentials.json",
     "settings.json",
     "credentials.json",
 )
@@ -132,9 +133,10 @@ def _detect_claude_credentials(claude_home: Path) -> tuple[bool, tuple[str, ...]
         if os.environ.get(key, "").strip():
             sources.append(f"env:{key}")
 
-    creds_file = claude_home / "credentials.json"
-    if creds_file.exists():
-        sources.append(str(creds_file))
+    for filename in (".credentials.json", "credentials.json"):
+        creds_file = claude_home / filename
+        if creds_file.exists():
+            sources.append(str(creds_file))
 
     return bool(sources), tuple(sources)
 
