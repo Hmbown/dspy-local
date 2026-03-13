@@ -831,6 +831,9 @@ def probe_codex_runtime(
 class CodexLM(BaseLM):
     """DSPy `BaseLM` wrapper that routes requests through local Codex runtimes."""
 
+    _CACHE_BUSTING_KWARGS = frozenset({"temperature", "rollout_id"})
+    _UNSET_UNSUPPORTED_KWARGS = frozenset({"temperature", "max_tokens", "rollout_id"})
+
     def __init__(
         self,
         model: str = DEFAULT_CODEX_MODEL,
@@ -862,6 +865,7 @@ class CodexLM(BaseLM):
         self.isolate_home = isolate_home
         self.model_spec = parse_codex_model(model)
         self._validate_runtime_kwargs(dict(self.kwargs), cache=self.cache)
+        self.kwargs = self._canonicalize_kwargs(self.kwargs)
 
     @staticmethod
     def _validate_runtime_kwargs(kwargs: dict[str, Any], *, cache: bool) -> None:
@@ -922,13 +926,22 @@ class CodexLM(BaseLM):
         if errors:
             raise CodexUnsupportedFeatureError(" ".join(dict.fromkeys(errors)))
 
-    _CACHE_BUSTING_KWARGS = frozenset({"temperature", "rollout_id"})
+    @classmethod
+    def _canonicalize_kwargs(cls, kwargs: dict[str, Any]) -> dict[str, Any]:
+        canonical = dict(kwargs)
+        for key in cls._UNSET_UNSUPPORTED_KWARGS:
+            if canonical.get(key) is None:
+                canonical.pop(key, None)
+        return canonical
 
     def copy(self, **kwargs: Any) -> "CodexLM":
         stripped = {k: kwargs.pop(k) for k in list(kwargs) if k in self._CACHE_BUSTING_KWARGS}
         if stripped:
             logger.debug("CodexLM.copy(): stripped cache-busting kwargs %s (no effect on Codex)", stripped)
-        return super().copy(**kwargs)
+        copied = cast(CodexLM, super().copy(**kwargs))
+        copied.kwargs = self._canonicalize_kwargs(copied.kwargs)
+        self._validate_runtime_kwargs(dict(copied.kwargs), cache=copied.cache)
+        return copied
 
     def _prepare_call(
         self,

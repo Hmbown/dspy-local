@@ -1,20 +1,28 @@
-## dspy-codex: DSPy With Local Codex Runtimes
+## dspy-codex: DSPy With Local LM Runtimes
 
-This fork adds a repo-local `dspy.CodexLM` client that routes DSPy calls through
-the local Codex CLI or the local `codex mcp-server`.
+This fork keeps the `dspy-codex` repo name, but it now ships three repo-local
+DSPy backends for local CLI runtimes:
 
-`pip install dspy` does not include this fork’s `dspy.CodexLM`. Use this repo
+- `dspy.CodexLM` for `codex exec` and `codex mcp-server`
+- `dspy.QwenLM` for the `qwen` CLI
+- `dspy.ClaudeLM` for `claude -p --output-format json`
+
+`pip install dspy` does not include these fork-specific clients. Use this repo
 checkout and its `uv` environment.
 
 ## Prerequisites
 
-1. Install the Codex CLI and make sure `codex --help` works.
-2. Authenticate Codex so `~/.codex/auth.json` exists or `OPENAI_API_KEY` is set.
-3. From this repo root, install the Python environment:
+1. Install the Python environment from this repo root:
 
 ```bash
 uv sync --extra mcp --extra dev
 ```
+
+2. Install and authenticate whichever local CLI you want to use:
+
+- Codex: `codex --help` works and `~/.codex/auth.json` exists or `OPENAI_API_KEY` is set.
+- Qwen: `qwen --help` works and your `~/.qwen` credentials are configured.
+- Claude: `claude --help` works and `~/.claude/credentials.json` exists or `ANTHROPIC_API_KEY` is set.
 
 ## Fresh-Clone Quickstart
 
@@ -22,104 +30,159 @@ uv sync --extra mcp --extra dev
 git clone <this-fork>
 cd dspy-codex
 uv sync --extra mcp --extra dev
+```
+
+Run the backend you want to validate:
+
+```bash
 uv run python scripts/dspy_codex_doctor.py --json
 uv run python scripts/dspy_codex_probe.py --transport auto --json
 uv run python scripts/dspy_codex_smoke.py --transport auto --json
 ```
 
+```bash
+uv run python scripts/dspy_qwen_doctor.py --json
+uv run python scripts/dspy_qwen_probe.py --json
+uv run python scripts/dspy_qwen_smoke.py --json
+```
+
+```bash
+uv run python scripts/dspy_claude_doctor.py --json
+uv run python scripts/dspy_claude_probe.py --json
+uv run python scripts/dspy_claude_smoke.py --json
+```
+
 ## Model Aliases
+
+Codex aliases:
 
 - `codex/default`: prefer MCP when available and fall back once to CLI if MCP fails.
 - `codex-exec/default`: force direct `codex exec`.
 - `codex-mcp/default`: force `codex mcp-server`.
 
-Optional environment override for the generic alias:
+Optional environment override for the generic Codex alias:
 
 ```bash
 export DSPY_CODEX_TRANSPORT=auto  # auto | cli | mcp
 ```
 
-## First Real Check
+Qwen aliases:
 
-Run these in order after a fresh clone:
+- `qwen/default`
+- `qwen/qwen-max`
 
-```bash
-uv run python scripts/dspy_codex_doctor.py --json
-uv run python scripts/dspy_codex_probe.py --transport auto --json
-uv run python scripts/dspy_codex_smoke.py --transport auto --json
-```
+Claude aliases:
 
-If you want the doctor to do a live probe too:
+- `claude/default`
+- `claude/sonnet`
+- `claude/opus`
+- `claude/claude-sonnet-4-6`
 
-```bash
-uv run python scripts/dspy_codex_doctor.py --live --json
-```
+## Quick Examples
 
-## Quick Example
+Codex:
 
 ```python
 from pathlib import Path
 
 import dspy
 
-lm = dspy.CodexLM(
-    model="codex/default",
-    repo_root=Path.cwd(),
-)
+lm = dspy.CodexLM(model="codex/default", repo_root=Path.cwd())
 dspy.configure(lm=lm)
 ```
 
-Force the transport with the alias when needed:
+Qwen:
 
 ```python
-dspy.CodexLM(model="codex/default", repo_root=Path.cwd())
-dspy.CodexLM(model="codex-exec/default", repo_root=Path.cwd())
-dspy.CodexLM(model="codex-mcp/default", repo_root=Path.cwd())
+from pathlib import Path
+
+import dspy
+
+lm = dspy.QwenLM(model="qwen/default", repo_root=Path.cwd())
+dspy.configure(lm=lm)
 ```
 
-## Why `CODEX_HOME` Is Isolated
+Claude:
 
-`dspy.CodexLM` copies `auth.json`, `models_cache.json`, and `version.json` into
-a temporary `CODEX_HOME` before launching Codex. That preserves authentication
-and model discovery while avoiding unrelated user-level hooks, MCP servers, and
-other interactive Codex config from leaking into automated DSPy runs.
+```python
+from pathlib import Path
+
+import dspy
+
+lm = dspy.ClaudeLM(model="claude/sonnet", repo_root=Path.cwd())
+dspy.configure(lm=lm)
+```
+
+Minimal DSPy usage with Claude:
+
+```python
+from pathlib import Path
+
+import dspy
+
+class AnswerQuestion(dspy.Signature):
+    question = dspy.InputField()
+    answer = dspy.OutputField()
+
+lm = dspy.ClaudeLM(model="claude/claude-sonnet-4-6", repo_root=Path.cwd())
+dspy.configure(lm=lm)
+
+predict = dspy.Predict(AnswerQuestion)
+result = predict(question="Reply with exactly one word: ready")
+print(result.answer)
+```
+
+## Runtime Notes
+
+- `dspy.CodexLM` supports both CLI and MCP transports.
+- `dspy.QwenLM` is CLI-only in v1 and runs with `--approval-mode plan`.
+- `dspy.ClaudeLM` is CLI-only in v1 and runs through `claude -p --output-format json`.
+- All three backends support text-only DSPy flows and reject structured non-text inputs, native tool calls, and predicted outputs explicitly.
+
+## Isolation Behavior
+
+The local runtime wrappers isolate user config before invoking the CLIs so DSPy
+runs stay reproducible:
+
+- `dspy.CodexLM` copies the needed `CODEX_HOME` files into a temporary runtime home.
+- `dspy.QwenLM` copies the needed `~/.qwen` files into a temporary runtime home.
+- `dspy.ClaudeLM` copies the needed `~/.claude` files into a temporary runtime home.
+
+That preserves authentication and model discovery while avoiding unrelated
+interactive hooks and local side effects from leaking into automated DSPy runs.
 
 ## Optimizer Compatibility
 
-`dspy.CodexLM` works with DSPy optimizers that run through the standard
-`lm(prompt)` and `lm.forward()` paths:
+All three local backends work through the standard text-only DSPy `lm(prompt)`
+and `lm.forward()` paths.
 
-- **GEPA** — fully compatible. Use CodexLM as both the student and reflection
-  LM. See `scripts/dspy_codex_gepa.py` for a minimal working example.
-- **LabeledFewShot** — fully compatible.
-- **BootstrapFewShot** — compatible with `max_rounds=1` (the default). Multi-
-  round bootstrap uses `lm.copy(temperature=..., rollout_id=...)` for cache
-  busting; CodexLM silently strips these since the local transports don't
-  expose sampling controls.
-- **Evaluate** — fully compatible with both CLI and MCP transports.
+- **GEPA**: compatible with CodexLM, QwenLM, and ClaudeLM.
+- **LabeledFewShot**: compatible.
+- **Evaluate**: compatible.
+- **BootstrapFewShot**: compatible with `max_rounds=1`; cache-busting kwargs such as `temperature` and `rollout_id` are intentionally stripped because the local CLIs do not expose those controls in a meaningful way.
+
+Bundled GEPA demos:
 
 ```bash
 uv run python scripts/dspy_codex_gepa.py --json
+uv run python scripts/dspy_qwen_gepa.py --json
+uv run python scripts/dspy_claude_gepa.py --json
 ```
 
-## Current Capability Boundaries
+Claude GEPA live example:
 
-- Text-only prompts are supported for sync and async flows.
-- Structured non-text message content such as images, audio, files, and tool
-  call messages is rejected explicitly instead of being silently flattened.
-- Native tool calling is not supported yet.
-- MCP usage data is currently unknown, so MCP calls report empty usage rather
-  than synthetic zero-token usage.
+```bash
+uv run python scripts/dspy_claude_gepa.py --model claude/sonnet --max-metric-calls 3 --json
+```
 
 ## Troubleshooting
 
-- Missing CLI: `scripts/dspy_codex_doctor.py` should show `Codex CLI: missing`.
-- Missing auth: doctor should show `Credential source: missing`.
-- Missing MCP dependency: install the repo env with `uv sync --extra mcp --extra dev`.
-- Unexpected transport: inspect `requested_transport`, `preferred_transport`,
-  `available_transports`, and `resolved_model` in doctor/probe output.
-- Fallback behavior: `codex/default` prefers MCP and records `fallback_from=...`
-  when it has to drop back to CLI.
+- Missing Codex runtime: `uv run python scripts/dspy_codex_doctor.py --json`
+- Missing Qwen runtime: `uv run python scripts/dspy_qwen_doctor.py --json`
+- Missing Claude runtime: `uv run python scripts/dspy_claude_doctor.py --json`
+- Missing Python deps: `uv sync --extra mcp --extra dev`
+- Unexpected Codex transport: inspect `requested_transport`, `preferred_transport`, `available_transports`, and `resolved_model` in the doctor or probe output.
+- Codex fallback behavior: `codex/default` records `fallback_from=...` when it has to drop from MCP to CLI.
 
 <p align="center">
   <img align="center" src="docs/docs/static/img/dspy_logo.png" width="460px" />

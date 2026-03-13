@@ -404,6 +404,13 @@ def test_codex_lm_rejects_non_text_messages_before_transport(monkeypatch: pytest
         )
 
 
+def test_codex_lm_does_not_store_unset_unsupported_kwargs() -> None:
+    lm = CodexLM(model="codex/default", repo_root=Path.cwd())
+    assert "temperature" not in lm.kwargs
+    assert "max_tokens" not in lm.kwargs
+    assert lm.kwargs == {"timeout_seconds": 120}
+
+
 def test_codex_lm_copy_strips_cache_busting_kwargs(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "dspy.clients.codex.run_codex",
@@ -417,11 +424,30 @@ def test_codex_lm_copy_strips_cache_busting_kwargs(monkeypatch: pytest.MonkeyPat
 
     lm = CodexLM(model="codex/default", repo_root=Path.cwd())
     copied = lm.copy(rollout_id=1, temperature=1.0)
-    assert "temperature" not in copied.kwargs or copied.kwargs.get("temperature") is None
+    assert "temperature" not in copied.kwargs
+    assert "max_tokens" not in copied.kwargs
     assert "rollout_id" not in copied.kwargs
+    assert copied.kwargs == {"timeout_seconds": 120}
 
     response = copied.forward(prompt="question")
     assert response.choices[0].message.content == "answer"
+
+
+@pytest.mark.parametrize(
+    ("copy_kwargs", "match"),
+    [
+        ({"cache": True}, "cache"),
+        ({"max_tokens": 32}, "max_tokens"),
+    ],
+)
+def test_codex_lm_copy_rejects_unsupported_kwargs(
+    copy_kwargs: dict[str, object],
+    match: str,
+) -> None:
+    lm = CodexLM(model="codex/default", repo_root=Path.cwd())
+
+    with pytest.raises(CodexUnsupportedFeatureError, match=match):
+        lm.copy(**copy_kwargs)
 
 
 def test_install_codex_skill_links_into_codex_home(
