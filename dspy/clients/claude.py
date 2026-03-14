@@ -70,8 +70,16 @@ class ClaudeResult:
 
 
 @dataclass(frozen=True)
+class PromptParts:
+    """Separated system and user prompt parts for Claude CLI."""
+    system: str
+    prompt: str
+
+
+@dataclass(frozen=True)
 class ClaudeCallOptions:
     prompt: str
+    system_prompt: str
     timeout_seconds: int
     permission_mode: str
     isolate_home: bool
@@ -226,11 +234,21 @@ def _coerce_content(content: Any, *, role: str) -> str:
 def build_prompt(
     prompt: str | None = None,
     messages: list[dict[str, Any]] | None = None,
-) -> str:
+) -> PromptParts:
+    """Build separated system and user prompt parts from messages.
+
+    System-role messages are extracted so they can be passed via
+    ``--system-prompt`` to the Claude CLI, avoiding the appearance of
+    injected role markers (``SYSTEM:``, ``USER:``) inside a flat user
+    prompt — which Claude can flag as prompt-injection.
+
+    Non-system messages are joined without role prefixes; DSPy's own
+    field delimiters (``[[ ## field ## ]]``) already provide structure.
+    """
     if messages:
-        chunks: list[str] = []
+        system_chunks: list[str] = []
+        user_chunks: list[str] = []
         for message in messages:
-            role = str(message.get("role", "user")).upper()
             if message.get("tool_calls"):
                 raise ClaudeUnsupportedFeatureError("ClaudeLM does not support tool-call messages yet.")
             if message.get("tool_call_id"):
@@ -239,12 +257,19 @@ def build_prompt(
             if raw_role == "tool":
                 raise ClaudeUnsupportedFeatureError("ClaudeLM does not support tool result messages yet.")
             content = _coerce_content(message.get("content", ""), role=raw_role)
-            if content:
-                chunks.append(f"{role}:\n{content}")
+            if not content:
+                continue
+            if raw_role == "system":
+                system_chunks.append(content)
+            else:
+                user_chunks.append(content)
         if prompt:
-            chunks.append(f"PROMPT:\n{prompt}")
-        return "\n\n".join(chunks).strip()
-    return (prompt or "").strip()
+            user_chunks.append(prompt)
+        return PromptParts(
+            system="\n\n".join(system_chunks).strip(),
+            prompt="\n\n".join(user_chunks).strip(),
+        )
+    return PromptParts(system="", prompt=(prompt or "").strip())
 
 
 def _coerce_usage(usage: dict[str, Any] | None) -> dict[str, Any]:
@@ -313,6 +338,7 @@ def _build_claude_command(
     *,
     claude_model: str | None,
     permission_mode: str,
+    system_prompt: str | None = None,
 ) -> list[str]:
     cli = claude_cli_path()
     if not cli:
@@ -328,6 +354,8 @@ def _build_claude_command(
     ]
     if claude_model:
         command.extend(["--model", claude_model])
+    if system_prompt:
+        command.extend(["--system-prompt", system_prompt])
     return command
 
 
@@ -339,8 +367,13 @@ def run_claude_cli(
     timeout_seconds: int = 120,
     permission_mode: str = "plan",
     isolate_home: bool = True,
+    system_prompt: str | None = None,
 ) -> ClaudeResult:
-    command = _build_claude_command(claude_model=claude_model, permission_mode=permission_mode)
+    command = _build_claude_command(
+        claude_model=claude_model,
+        permission_mode=permission_mode,
+        system_prompt=system_prompt,
+    )
     command.append(prompt)
 
     with _claude_environment(isolate_home=isolate_home) as env:
@@ -377,8 +410,13 @@ async def arun_claude_cli(
     timeout_seconds: int = 120,
     permission_mode: str = "plan",
     isolate_home: bool = True,
+    system_prompt: str | None = None,
 ) -> ClaudeResult:
-    command = _build_claude_command(claude_model=claude_model, permission_mode=permission_mode)
+    command = _build_claude_command(
+        claude_model=claude_model,
+        permission_mode=permission_mode,
+        system_prompt=system_prompt,
+    )
     command.append(prompt)
 
     with _claude_environment(isolate_home=isolate_home) as env:
@@ -421,6 +459,7 @@ def run_claude(
     timeout_seconds: int = 120,
     permission_mode: str = "plan",
     isolate_home: bool = True,
+    system_prompt: str | None = None,
 ) -> ClaudeResult:
     spec = parse_claude_model(model)
     return run_claude_cli(
@@ -430,6 +469,7 @@ def run_claude(
         timeout_seconds=timeout_seconds,
         permission_mode=permission_mode,
         isolate_home=isolate_home,
+        system_prompt=system_prompt,
     )
 
 
@@ -441,6 +481,7 @@ async def arun_claude(
     timeout_seconds: int = 120,
     permission_mode: str = "plan",
     isolate_home: bool = True,
+    system_prompt: str | None = None,
 ) -> ClaudeResult:
     spec = parse_claude_model(model)
     return await arun_claude_cli(
@@ -450,6 +491,7 @@ async def arun_claude(
         timeout_seconds=timeout_seconds,
         permission_mode=permission_mode,
         isolate_home=isolate_home,
+        system_prompt=system_prompt,
     )
 
 
@@ -592,8 +634,10 @@ class ClaudeLM(BaseLM):
         merged_kwargs = {**self.kwargs, **call_kwargs}
         self._validate_runtime_kwargs(dict(merged_kwargs), cache=bool(cache_value))
         timeout_seconds = int(merged_kwargs.pop("timeout_seconds"))
+        parts = build_prompt(prompt=prompt, messages=messages)
         return ClaudeCallOptions(
-            prompt=build_prompt(prompt=prompt, messages=messages),
+            prompt=parts.prompt,
+            system_prompt=parts.system,
             timeout_seconds=timeout_seconds,
             permission_mode=permission_mode,
             isolate_home=isolate_home,
@@ -631,6 +675,7 @@ class ClaudeLM(BaseLM):
             timeout_seconds=options.timeout_seconds,
             permission_mode=options.permission_mode,
             isolate_home=options.isolate_home,
+            system_prompt=options.system_prompt or None,
         )
         return self._to_response(result)
 
@@ -648,6 +693,7 @@ class ClaudeLM(BaseLM):
             timeout_seconds=options.timeout_seconds,
             permission_mode=options.permission_mode,
             isolate_home=options.isolate_home,
+            system_prompt=options.system_prompt or None,
         )
         return self._to_response(result)
 
@@ -661,6 +707,7 @@ __all__ = [
     "ClaudeRuntimeInfo",
     "ClaudeTransportError",
     "ClaudeUnsupportedFeatureError",
+    "PromptParts",
     "arun_claude",
     "arun_claude_cli",
     "build_prompt",

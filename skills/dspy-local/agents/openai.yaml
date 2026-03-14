@@ -1,0 +1,4 @@
+interface:
+  display_name: "DSPy Local"
+  short_description: "Route DSPy through local Codex runtimes"
+  default_prompt: "Use $dspy-local to configure DSPy so it can call Codex through the available Codex transport."

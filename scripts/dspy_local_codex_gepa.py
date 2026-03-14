@@ -6,9 +6,9 @@ end-to-end on a local Codex runtime.  Both the student module and the
 reflection LM use CodexLM so nothing leaves the machine.
 
 Usage:
-    uv run python scripts/dspy_codex_gepa.py --json
-    uv run python scripts/dspy_codex_gepa.py --transport cli --json
-    uv run python scripts/dspy_codex_gepa.py --max-metric-calls 10 --json
+    uv run python scripts/dspy_local_codex_gepa.py --json
+    uv run python scripts/dspy_local_codex_gepa.py --transport cli --json
+    uv run python scripts/dspy_local_codex_gepa.py --max-metric-calls 10 --json
 """
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ except ModuleNotFoundError as exc:
     raise SystemExit(
         f"Missing Python dependency: {missing}. "
         "Run `uv sync --extra mcp --extra dev` once, or invoke this script "
-        "with `uv run python scripts/dspy_codex_gepa.py`."
+        "with `uv run python scripts/dspy_local_codex_gepa.py`."
     ) from exc
 
 

@@ -17,7 +17,7 @@ except ModuleNotFoundError as exc:
     raise SystemExit(
         f"Missing Python dependency: {missing}. "
         "Run `uv sync --extra mcp --extra dev` once, or invoke this script with "
-        "`uv run python scripts/dspy_codex_smoke.py`."
+        "`uv run python scripts/dspy_local_codex_smoke.py`."
     ) from exc
 
 

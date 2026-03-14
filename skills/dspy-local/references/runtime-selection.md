@@ -1,6 +1,6 @@
 # Runtime Selection
 
-`dspy-codex` supports three model aliases:
+`dspy-local` supports three model aliases:
 
 - `codex/default`
 - `codex-exec/default`

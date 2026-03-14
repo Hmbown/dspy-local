@@ -1,4 +1,0 @@
-interface:
-  display_name: "DSPy Codex"
-  short_description: "Route DSPy through Codex runtimes"
-  default_prompt: "Use $dspy-codex to configure DSPy so it can call Codex through the available Codex transport."

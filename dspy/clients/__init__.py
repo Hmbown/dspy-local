@@ -18,7 +18,7 @@ from dspy.clients.codex import (
     arun_codex_mcp,
     available_codex_models,
     inspect_codex_runtime,
-    install_codex_skill,
+    install_dspy_local_skill,
     probe_codex_runtime,
     run_codex,
 )
@@ -164,7 +164,7 @@ __all__ = [
     "arun_codex_mcp",
     "available_codex_models",
     "inspect_codex_runtime",
-    "install_codex_skill",
+    "install_dspy_local_skill",
     "probe_codex_runtime",
     "ClaudeLM",
     "ClaudeModelSpec",

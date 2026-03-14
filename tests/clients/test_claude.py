@@ -11,7 +11,9 @@ from dspy.clients.claude import (
     ClaudeLM,
     ClaudeResult,
     ClaudeUnsupportedFeatureError,
+    PromptParts,
     _parse_claude_result,
+    build_prompt,
     inspect_claude_runtime,
     parse_claude_model,
     run_claude,
@@ -306,3 +308,182 @@ def test_run_claude_uses_alias_model(monkeypatch: pytest.MonkeyPatch) -> None:
     result = run_claude(prompt="ready", repo_root=Path.cwd(), model="claude/sonnet")
     assert result.content == "ready"
     assert captured["claude_model"] == "sonnet"
+
+
+# ---------- build_prompt / PromptParts tests ----------
+
+
+def test_build_prompt_returns_prompt_parts() -> None:
+    parts = build_prompt(prompt="hello")
+    assert isinstance(parts, PromptParts)
+    assert parts.system == ""
+    assert parts.prompt == "hello"
+
+
+def test_build_prompt_separates_system_messages() -> None:
+    messages = [
+        {"role": "system", "content": "You are a translator."},
+        {"role": "user", "content": "Translate this."},
+    ]
+    parts = build_prompt(messages=messages)
+    assert parts.system == "You are a translator."
+    assert parts.prompt == "Translate this."
+    assert "SYSTEM" not in parts.prompt
+    assert "USER" not in parts.prompt
+
+
+def test_build_prompt_no_role_prefixes_in_prompt() -> None:
+    """Verify the prompt never contains suspicious ROLE: markers."""
+    messages = [
+        {"role": "system", "content": "System instructions here."},
+        {"role": "user", "content": "[[ ## question ## ]]\nWhat is 2+2?"},
+        {"role": "assistant", "content": "[[ ## answer ## ]]\n4\n\n[[ ## completed ## ]]"},
+        {"role": "user", "content": "[[ ## question ## ]]\nWhat is 3+3?"},
+    ]
+    parts = build_prompt(messages=messages)
+    assert parts.system == "System instructions here."
+    # No role markers that could trigger injection detection
+    assert "SYSTEM:" not in parts.prompt
+    assert "USER:" not in parts.prompt
+    assert "ASSISTANT:" not in parts.prompt
+    # Content is preserved
+    assert "[[ ## question ## ]]" in parts.prompt
+    assert "[[ ## answer ## ]]" in parts.prompt
+    assert "What is 3+3?" in parts.prompt
+
+
+def test_build_prompt_multiple_system_messages_merged() -> None:
+    messages = [
+        {"role": "system", "content": "Part 1."},
+        {"role": "system", "content": "Part 2."},
+        {"role": "user", "content": "Go."},
+    ]
+    parts = build_prompt(messages=messages)
+    assert "Part 1." in parts.system
+    assert "Part 2." in parts.system
+    assert parts.prompt == "Go."
+
+
+def test_build_prompt_with_prompt_and_messages() -> None:
+    messages = [
+        {"role": "system", "content": "Be helpful."},
+        {"role": "user", "content": "Input data."},
+    ]
+    parts = build_prompt(prompt="Extra context.", messages=messages)
+    assert parts.system == "Be helpful."
+    assert "Input data." in parts.prompt
+    assert "Extra context." in parts.prompt
+
+
+# ---------- system_prompt threading tests ----------
+
+
+def test_system_prompt_passed_to_cli_command(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Verify that system messages end up as --system-prompt in the CLI command."""
+    captured: dict[str, object] = {}
+
+    home_dir = tmp_path / "home"
+    claude_dir = home_dir / ".claude"
+    claude_dir.mkdir(parents=True)
+    (claude_dir / ".credentials.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(home_dir))
+
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        return SimpleNamespace(
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "type": "result",
+                    "subtype": "success",
+                    "result": "answer",
+                    "session_id": "s-1",
+                    "usage": {"input_tokens": 1, "output_tokens": 1},
+                    "modelUsage": {"claude-sonnet-4-6": {}},
+                }
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr("dspy.clients.claude.claude_cli_path", lambda: "/tmp/claude")
+    monkeypatch.setattr("dspy.clients.claude.subprocess.run", fake_run)
+
+    run_claude_cli(
+        prompt="user text",
+        repo_root=Path.cwd(),
+        system_prompt="system instructions",
+        isolate_home=True,
+    )
+
+    command = captured["command"]
+    assert isinstance(command, list)
+    assert "--system-prompt" in command
+    idx = command.index("--system-prompt")
+    assert command[idx + 1] == "system instructions"
+
+
+def test_no_system_prompt_flag_when_empty(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Verify --system-prompt is omitted when there's no system content."""
+    captured: dict[str, object] = {}
+
+    home_dir = tmp_path / "home"
+    claude_dir = home_dir / ".claude"
+    claude_dir.mkdir(parents=True)
+    (claude_dir / ".credentials.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(home_dir))
+
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        return SimpleNamespace(
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "type": "result",
+                    "subtype": "success",
+                    "result": "answer",
+                    "session_id": "s-1",
+                    "usage": {"input_tokens": 1, "output_tokens": 1},
+                    "modelUsage": {"claude-sonnet-4-6": {}},
+                }
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr("dspy.clients.claude.claude_cli_path", lambda: "/tmp/claude")
+    monkeypatch.setattr("dspy.clients.claude.subprocess.run", fake_run)
+
+    run_claude_cli(
+        prompt="user text",
+        repo_root=Path.cwd(),
+        isolate_home=True,
+    )
+
+    command = captured["command"]
+    assert "--system-prompt" not in command
+
+
+def test_claude_lm_forward_threads_system_prompt(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify end-to-end: system messages in DSPy chat format → --system-prompt on CLI."""
+    captured: dict[str, object] = {}
+
+    def fake_run_claude(**kwargs):
+        captured.update(kwargs)
+        return ClaudeResult(
+            content="[[ ## answer ## ]]\n4\n\n[[ ## completed ## ]]",
+            usage={"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8},
+            resolved_model="claude-sonnet-4-6",
+        )
+
+    monkeypatch.setattr("dspy.clients.claude.run_claude", fake_run_claude)
+    lm = ClaudeLM(model="claude/default", repo_root=Path.cwd())
+
+    lm.forward(
+        messages=[
+            {"role": "system", "content": "You are a math tutor."},
+            {"role": "user", "content": "[[ ## question ## ]]\nWhat is 2+2?"},
+        ]
+    )
+
+    assert captured["system_prompt"] == "You are a math tutor."
+    assert "SYSTEM" not in captured["prompt"]
+    assert "[[ ## question ## ]]" in captured["prompt"]

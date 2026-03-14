@@ -1,9 +1,9 @@
 ---
-name: dspy-codex
-description: Configure or troubleshoot DSPy integrations that use local OpenAI Codex runtimes as the language model backend. Use when a repo needs a `dspy.BaseLM` adapter for Codex, when DSPy should auto-route between `codex exec` and `codex mcp-server`, when the bundled `dspy-codex` skill must be installed into `CODEX_HOME`, or when local Codex auth/model discovery needs to be verified before compile or eval runs.
+name: dspy-local
+description: Configure or troubleshoot dspy-local integrations that use local Codex runtimes as the language model backend. Use when a repo needs a `dspy.BaseLM` adapter for Codex, when DSPy should auto-route between `codex exec` and `codex mcp-server`, when the bundled `dspy-local` skill must be installed into `CODEX_HOME`, or when local Codex auth/model discovery needs to be verified before compile or eval runs.
 ---
 
-# DSPy Codex
+# DSPy Local
 
 ## Overview
 
@@ -12,10 +12,10 @@ Prefer the shipped helper scripts and the existing runtime-selection logic befor
 
 ## First Pass
 
-1. From the repo root, run `uv run python scripts/dspy_codex_doctor.py`.
-2. If the task is a live transport check, run `uv run python scripts/dspy_codex_probe.py --transport auto`.
-3. If the task is a real DSPy smoke check, run `uv run python scripts/dspy_codex_smoke.py --transport auto`.
-4. Read `skills/dspy-codex/references/runtime-selection.md` before changing aliases, env vars, or fallback order.
+1. From the repo root, run `uv run python scripts/dspy_local_codex_doctor.py`.
+2. If the task is a live transport check, run `uv run python scripts/dspy_local_codex_probe.py --transport auto`.
+3. If the task is a real DSPy smoke check, run `uv run python scripts/dspy_local_codex_smoke.py --transport auto`.
+4. Read `skills/dspy-local/references/runtime-selection.md` before changing aliases, env vars, or fallback order.
 
 ## Python Integration
 
@@ -44,13 +44,13 @@ Model aliases:
 Install the bundled skill into Codex:
 
 ```bash
-uv run python scripts/install_codex_skill.py
+uv run python scripts/install_dspy_local_skill.py
 ```
 
 For a non-default home:
 
 ```bash
-uv run python scripts/install_codex_skill.py --codex-home /path/to/codex-home
+uv run python scripts/install_dspy_local_skill.py --codex-home /path/to/codex-home
 ```
 
 ## GEPA Optimization
@@ -78,7 +78,7 @@ optimized = optimizer.compile(dspy.Predict("question -> answer"), trainset=train
 Or run the bundled example:
 
 ```bash
-uv run python scripts/dspy_codex_gepa.py --json
+uv run python scripts/dspy_local_codex_gepa.py --json
 ```
 
 ## Runtime Rules
@@ -91,11 +91,11 @@ uv run python scripts/dspy_codex_gepa.py --json
 
 ## Bundled Scripts
 
-- `scripts/dspy_codex_doctor.py`: run the repo-local environment check. Add `--live` to append a readiness probe.
-- `scripts/dspy_codex_probe.py`: run a live `ready` probe through the selected transport.
-- `scripts/dspy_codex_smoke.py`: run a minimal `dspy.Predict(...)` call through `dspy.CodexLM`.
-- `scripts/dspy_codex_gepa.py`: run a minimal GEPA optimization with `dspy.CodexLM` as both student and reflection LM.
-- `scripts/install_codex_skill.py`: install the bundled skill into `CODEX_HOME/skills`.
+- `scripts/dspy_local_codex_doctor.py`: run the repo-local environment check. Add `--live` to append a readiness probe.
+- `scripts/dspy_local_codex_probe.py`: run a live `ready` probe through the selected transport.
+- `scripts/dspy_local_codex_smoke.py`: run a minimal `dspy.Predict(...)` call through `dspy.CodexLM`.
+- `scripts/dspy_local_codex_gepa.py`: run a minimal GEPA optimization with `dspy.CodexLM` as both student and reflection LM.
+- `scripts/install_dspy_local_skill.py`: install the bundled skill into `CODEX_HOME/skills`.
 
 ## Guardrails
 
@@ -108,14 +108,14 @@ uv run python scripts/dspy_codex_gepa.py --json
 Use this checklist:
 
 1. `uv sync --extra mcp --extra dev`
-2. `uv run python scripts/dspy_codex_doctor.py --json`
-3. `uv run python scripts/dspy_codex_probe.py --transport auto --json`
-4. `uv run python scripts/dspy_codex_probe.py --transport cli --json`
-5. `uv run python scripts/dspy_codex_probe.py --transport mcp --json`
-6. `uv run python scripts/dspy_codex_smoke.py --transport auto --json`
-7. `uv run python scripts/dspy_codex_smoke.py --transport cli --json`
-8. `uv run python scripts/dspy_codex_smoke.py --transport mcp --json`
-9. `uv run python scripts/dspy_codex_gepa.py --json`
+2. `uv run python scripts/dspy_local_codex_doctor.py --json`
+3. `uv run python scripts/dspy_local_codex_probe.py --transport auto --json`
+4. `uv run python scripts/dspy_local_codex_probe.py --transport cli --json`
+5. `uv run python scripts/dspy_local_codex_probe.py --transport mcp --json`
+6. `uv run python scripts/dspy_local_codex_smoke.py --transport auto --json`
+7. `uv run python scripts/dspy_local_codex_smoke.py --transport cli --json`
+8. `uv run python scripts/dspy_local_codex_smoke.py --transport mcp --json`
+9. `uv run python scripts/dspy_local_codex_gepa.py --json`
 10. `uv run python -m pytest tests/clients/test_codex.py`
 
 ## References

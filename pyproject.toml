@@ -6,10 +6,10 @@ build-backend = "setuptools.build_meta"
 # Do not add spaces around the '=' sign for any of the fields
 # preceded by a marker comment as it affects the publish workflow.
 #replace_package_name_marker
-name="dspy"
+name="dspy-local"
 #replace_package_version_marker
 version="3.1.3"
-description = "DSPy"
+description = "Local CLI runtime adapters for DSPy"
 readme = "README.md"
 authors = [{ name = "Omar Khattab", email = "okhattab@stanford.edu" }]
 license = {file = "LICENSE"}
@@ -76,7 +76,7 @@ exclude = ["tests", "tests.*"]
 dspy = ["primitives/*.js"]
 
 [project.urls]
-homepage = "https://github.com/stanfordnlp/dspy"
+homepage = "https://github.com/Hmbown/dspy-local"
 
 [tool.coverage.run]
 branch = true

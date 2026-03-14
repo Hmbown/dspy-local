@@ -17,7 +17,7 @@ from dspy.clients.codex import (
     arun_codex,
     available_codex_models,
     build_prompt,
-    install_codex_skill,
+    install_dspy_local_skill,
     parse_codex_model,
     resolve_requested_transport,
     run_codex,
@@ -450,12 +450,12 @@ def test_codex_lm_copy_rejects_unsupported_kwargs(
         lm.copy(**copy_kwargs)
 
 
-def test_install_codex_skill_links_into_codex_home(
+def test_install_dspy_local_skill_links_into_codex_home(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex-home"))
-    result = install_codex_skill()
+    result = install_dspy_local_skill()
     destination = Path(result["destination"])
     assert destination.exists()
     assert destination.is_symlink() or destination.is_dir()

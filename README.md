@@ -1,281 +1,177 @@
-## dspy-codex: DSPy With Local LM Runtimes
+# dspy-local
 
-This fork keeps the `dspy-codex` repo name, but it now ships three repo-local
-DSPy backends for local CLI runtimes:
+**Local CLI runtime adapters for [DSPy](https://dspy.ai/)** — run DSPy programs through Codex, Qwen, and Claude command-line tools without an API key or cloud endpoint.
 
-- `dspy.CodexLM` for `codex exec` and `codex mcp-server`
-- `dspy.QwenLM` for the `qwen` CLI
-- `dspy.ClaudeLM` for `claude -p --output-format json`
+`dspy-local` extends DSPy with three `BaseLM` backends that invoke locally-installed CLI runtimes:
 
-`pip install dspy` does not include these fork-specific clients. Use this repo
-checkout and its `uv` environment.
+| Backend | CLI | Transports | GEPA |
+|---|---|---|---|
+| `dspy.CodexLM` | `codex exec` / `codex mcp-server` | CLI, MCP, auto-fallback | Yes |
+| `dspy.QwenLM` | `qwen` | CLI | Yes |
+| `dspy.ClaudeLM` | `claude -p --output-format json` | CLI | Yes |
 
-## Prerequisites
+All three work as drop-in replacements anywhere DSPy expects an LM — `dspy.Predict`, `dspy.ChainOfThought`, `dspy.Evaluate`, and DSPy optimizers including **[GEPA](https://arxiv.org/abs/2507.19457)**.
 
-1. Install the Python environment from this repo root:
+## Quickstart
 
 ```bash
+git clone https://github.com/Hmbown/dspy-local.git
+cd dspy-local
 uv sync --extra mcp --extra dev
 ```
 
-2. Install and authenticate whichever local CLI you want to use:
-
-- Codex: `codex --help` works and `~/.codex/auth.json` exists or `OPENAI_API_KEY` is set.
-- Qwen: `qwen --help` works and your `~/.qwen` credentials are configured.
-- Claude: `claude --help` works and `~/.claude/credentials.json` exists or `ANTHROPIC_API_KEY` is set.
-
-## Fresh-Clone Quickstart
+Verify the backend(s) you have installed:
 
 ```bash
-git clone <this-fork>
-cd dspy-codex
-uv sync --extra mcp --extra dev
-```
+# Codex
+uv run python scripts/dspy_local_codex_doctor.py --json
+uv run python scripts/dspy_local_codex_smoke.py --transport auto --json
 
-Run the backend you want to validate:
+# Claude
+uv run python scripts/dspy_claude_doctor.py --json
+uv run python scripts/dspy_claude_smoke.py --json
 
-```bash
-uv run python scripts/dspy_codex_doctor.py --json
-uv run python scripts/dspy_codex_probe.py --transport auto --json
-uv run python scripts/dspy_codex_smoke.py --transport auto --json
-```
-
-```bash
+# Qwen
 uv run python scripts/dspy_qwen_doctor.py --json
-uv run python scripts/dspy_qwen_probe.py --json
 uv run python scripts/dspy_qwen_smoke.py --json
 ```
 
-```bash
-uv run python scripts/dspy_claude_doctor.py --json
-uv run python scripts/dspy_claude_probe.py --json
-uv run python scripts/dspy_claude_smoke.py --json
+## Prerequisites
+
+Install and authenticate whichever CLI(s) you want to use:
+
+- **Codex**: `codex --help` works and `~/.codex/auth.json` exists or `OPENAI_API_KEY` is set.
+- **Qwen**: `qwen --help` works and `~/.qwen` credentials are configured.
+- **Claude**: `claude --help` works and `~/.claude/credentials.json` exists or `ANTHROPIC_API_KEY` is set.
+
+## Usage
+
+```python
+from pathlib import Path
+import dspy
+
+# Pick your backend
+lm = dspy.CodexLM(model="codex/default", repo_root=Path.cwd())
+# lm = dspy.QwenLM(model="qwen/default", repo_root=Path.cwd())
+# lm = dspy.ClaudeLM(model="claude/sonnet", repo_root=Path.cwd())
+
+dspy.configure(lm=lm)
+
+class QA(dspy.Signature):
+    question = dspy.InputField()
+    answer = dspy.OutputField()
+
+predict = dspy.Predict(QA)
+result = predict(question="What is the capital of France?")
+print(result.answer)
 ```
 
 ## Model Aliases
 
-Codex aliases:
+**Codex:**
 
-- `codex/default`: prefer MCP when available and fall back once to CLI if MCP fails.
-- `codex-exec/default`: force direct `codex exec`.
-- `codex-mcp/default`: force `codex mcp-server`.
+| Alias | Behavior |
+|---|---|
+| `codex/default` | Prefer MCP, fall back to CLI |
+| `codex-exec/default` | Force `codex exec` |
+| `codex-mcp/default` | Force `codex mcp-server` |
 
-Optional environment override for the generic Codex alias:
+Override with `DSPY_CODEX_TRANSPORT=auto|cli|mcp`.
 
-```bash
-export DSPY_CODEX_TRANSPORT=auto  # auto | cli | mcp
-```
+**Claude:** `claude/default`, `claude/sonnet`, `claude/opus`, `claude/claude-sonnet-4-6`
 
-Qwen aliases:
+**Qwen:** `qwen/default`, `qwen/qwen-max`
 
-- `qwen/default`
-- `qwen/qwen-max`
+## GEPA Optimization
 
-Claude aliases:
-
-- `claude/default`
-- `claude/sonnet`
-- `claude/opus`
-- `claude/claude-sonnet-4-6`
-
-## Quick Examples
-
-Codex:
+All three backends are compatible with [GEPA (Reflective Prompt Evolution)](https://arxiv.org/abs/2507.19457). The same LM instance can serve as both the student and the reflection model:
 
 ```python
 from pathlib import Path
-
 import dspy
-
-lm = dspy.CodexLM(model="codex/default", repo_root=Path.cwd())
-dspy.configure(lm=lm)
-```
-
-Qwen:
-
-```python
-from pathlib import Path
-
-import dspy
-
-lm = dspy.QwenLM(model="qwen/default", repo_root=Path.cwd())
-dspy.configure(lm=lm)
-```
-
-Claude:
-
-```python
-from pathlib import Path
-
-import dspy
+from dspy.teleprompt.gepa import GEPA
 
 lm = dspy.ClaudeLM(model="claude/sonnet", repo_root=Path.cwd())
 dspy.configure(lm=lm)
+
+def metric(gold, pred, trace=None, pred_name=None, pred_trace=None):
+    score = float(pred.answer.strip().lower() == gold.answer.strip().lower())
+    return dspy.Prediction(score=score, feedback="Check the answer.")
+
+optimizer = GEPA(metric=metric, reflection_lm=lm, max_metric_calls=5)
+optimized = optimizer.compile(dspy.Predict("question -> answer"), trainset=trainset)
 ```
-
-Minimal DSPy usage with Claude:
-
-```python
-from pathlib import Path
-
-import dspy
-
-class AnswerQuestion(dspy.Signature):
-    question = dspy.InputField()
-    answer = dspy.OutputField()
-
-lm = dspy.ClaudeLM(model="claude/claude-sonnet-4-6", repo_root=Path.cwd())
-dspy.configure(lm=lm)
-
-predict = dspy.Predict(AnswerQuestion)
-result = predict(question="Reply with exactly one word: ready")
-print(result.answer)
-```
-
-## Runtime Notes
-
-- `dspy.CodexLM` supports both CLI and MCP transports.
-- `dspy.QwenLM` is CLI-only in v1 and runs with `--approval-mode plan`.
-- `dspy.ClaudeLM` is CLI-only in v1 and runs through `claude -p --output-format json`.
-- All three backends support text-only DSPy flows and reject structured non-text inputs, native tool calls, and predicted outputs explicitly.
-
-## Isolation Behavior
-
-The local runtime wrappers isolate user config before invoking the CLIs so DSPy
-runs stay reproducible:
-
-- `dspy.CodexLM` copies the needed `CODEX_HOME` files into a temporary runtime home.
-- `dspy.QwenLM` copies the needed `~/.qwen` files into a temporary runtime home.
-- `dspy.ClaudeLM` copies the needed `~/.claude` files into a temporary runtime home.
-
-That preserves authentication and model discovery while avoiding unrelated
-interactive hooks and local side effects from leaking into automated DSPy runs.
-
-## Optimizer Compatibility
-
-All three local backends work through the standard text-only DSPy `lm(prompt)`
-and `lm.forward()` paths.
-
-- **GEPA**: compatible with CodexLM, QwenLM, and ClaudeLM.
-- **LabeledFewShot**: compatible.
-- **Evaluate**: compatible.
-- **BootstrapFewShot**: compatible with `max_rounds=1`; cache-busting kwargs such as `temperature` and `rollout_id` are intentionally stripped because the local CLIs do not expose those controls in a meaningful way.
 
 Bundled GEPA demos:
 
 ```bash
-uv run python scripts/dspy_codex_gepa.py --json
-uv run python scripts/dspy_qwen_gepa.py --json
-uv run python scripts/dspy_claude_gepa.py --json
-```
-
-Claude GEPA live example:
-
-```bash
+uv run python scripts/dspy_local_codex_gepa.py --json
 uv run python scripts/dspy_claude_gepa.py --model claude/sonnet --max-metric-calls 3 --json
+uv run python scripts/dspy_qwen_gepa.py --json
 ```
+
+## Optimizer Compatibility
+
+| Optimizer | Status |
+|---|---|
+| **GEPA** | Compatible with all three backends |
+| **LabeledFewShot** | Compatible |
+| **Evaluate** | Compatible |
+| **BootstrapFewShot** | Compatible (`max_rounds=1`); cache-busting kwargs are stripped |
+
+## Architecture
+
+Each backend wraps a locally-installed CLI binary and implements `BaseLM.forward()` / `BaseLM.aforward()`. The wrappers handle:
+
+- **Prompt coercion**: DSPy's message format is flattened to a single text prompt suitable for CLI input.
+- **Transport resolution**: CodexLM supports MCP and CLI with automatic fallback; QwenLM and ClaudeLM are CLI-only.
+- **Config isolation**: Before each invocation, authentication files are copied into a temporary home directory. This keeps DSPy runs reproducible without leaking interactive hooks or local side effects.
+- **Usage normalization**: Token counts from each CLI's output format are mapped to the standard `prompt_tokens` / `completion_tokens` shape DSPy expects.
+
+Unsupported features (structured content, tool calling, predicted outputs, sampling controls) raise explicit errors rather than silently degrading.
 
 ## Troubleshooting
 
-- Missing Codex runtime: `uv run python scripts/dspy_codex_doctor.py --json`
-- Missing Qwen runtime: `uv run python scripts/dspy_qwen_doctor.py --json`
-- Missing Claude runtime: `uv run python scripts/dspy_claude_doctor.py --json`
-- Missing Python deps: `uv sync --extra mcp --extra dev`
-- Unexpected Codex transport: inspect `requested_transport`, `preferred_transport`, `available_transports`, and `resolved_model` in the doctor or probe output.
-- Codex fallback behavior: `codex/default` records `fallback_from=...` when it has to drop from MCP to CLI.
+| Issue | Command |
+|---|---|
+| Missing Codex runtime | `uv run python scripts/dspy_local_codex_doctor.py --json` |
+| Missing Qwen runtime | `uv run python scripts/dspy_qwen_doctor.py --json` |
+| Missing Claude runtime | `uv run python scripts/dspy_claude_doctor.py --json` |
+| Missing Python deps | `uv sync --extra mcp --extra dev` |
+| Unexpected transport | Inspect `requested_transport`, `preferred_transport`, and `available_transports` in doctor output |
+| Codex fallback | `codex/default` records `fallback_from` when MCP drops to CLI |
+
+## Tests
+
+```bash
+uv run python -m pytest tests/clients/test_codex.py tests/clients/test_claude.py -q
+```
+
+---
+
+## About DSPy
 
 <p align="center">
   <img align="center" src="docs/docs/static/img/dspy_logo.png" width="460px" />
 </p>
-<p align="left">
 
-## DSPy: _Programming_—not prompting—Foundation Models
+DSPy is the framework for *programming—rather than prompting—language models*. Instead of brittle prompts, you write compositional Python code and use DSPy to teach your LM to deliver high-quality outputs.
 
-**Documentation:** [DSPy Docs](https://dspy.ai/)
+**Documentation:** [dspy.ai](https://dspy.ai/) | **Community:** [Discord](https://discord.gg/XCGy2WDCQB) | **Twitter:** [@DSPyOSS](https://twitter.com/DSPyOSS)
 
-[![PyPI Downloads](https://static.pepy.tech/personalized-badge/dspy?period=monthly)](https://pepy.tech/projects/dspy)
+### Key Papers
 
+- **[GEPA: Reflective Prompt Evolution Can Outperform Reinforcement Learning](https://arxiv.org/abs/2507.19457)** (Jul 2025)
+- **[Optimizing Instructions and Demonstrations for Multi-Stage Language Model Programs](https://arxiv.org/abs/2406.11695)** (Jun 2024)
+- **[DSPy: Compiling Declarative Language Model Calls into Self-Improving Pipelines](https://arxiv.org/abs/2310.03714)** (Oct 2023)
 
-----
+### Citation
 
-DSPy is the framework for _programming—rather than prompting—language models_. It allows you to iterate fast on **building modular AI systems** and offers algorithms for **optimizing their prompts and weights**, whether you're building simple classifiers, sophisticated RAG pipelines, or Agent loops.
-
-DSPy stands for Declarative Self-improving Python. Instead of brittle prompts, you write compositional _Python code_ and use DSPy to **teach your LM to deliver high-quality outputs**. Learn more via our [official documentation site](https://dspy.ai/) or meet the community, seek help, or start contributing via this GitHub repo and our [Discord server](https://discord.gg/XCGy2WDCQB).
-
-
-## Documentation: [dspy.ai](https://dspy.ai)
-
-
-**Please go to the [DSPy Docs at dspy.ai](https://dspy.ai)**
-
-
-## Installation
-
-If you want this fork’s `dspy.CodexLM`, stay in this checkout and install the
-repo environment instead:
-
-```bash
-uv sync --extra mcp --extra dev
-```
-
-The upstream install commands below do not include this fork-specific Codex
-client.
-
-```bash
-pip install dspy
-```
-
-To install the very latest from `main`:
-
-```bash
-pip install git+https://github.com/stanfordnlp/dspy.git
-````
-
-
-
-
-## 📜 Citation & Reading More
-
-If you're looking to understand the framework, please go to the [DSPy Docs at dspy.ai](https://dspy.ai).
-
-If you're looking to understand the underlying research, this is a set of our papers:
-
-**[Jul'25] [GEPA: Reflective Prompt Evolution Can Outperform Reinforcement Learning](https://arxiv.org/abs/2507.19457)**       
-**[Jun'24] [Optimizing Instructions and Demonstrations for Multi-Stage Language Model Programs](https://arxiv.org/abs/2406.11695)**       
-**[Oct'23] [DSPy: Compiling Declarative Language Model Calls into Self-Improving Pipelines](https://arxiv.org/abs/2310.03714)**     
-[Jul'24] [Fine-Tuning and Prompt Optimization: Two Great Steps that Work Better Together](https://arxiv.org/abs/2407.10930)     
-[Jun'24] [Prompts as Auto-Optimized Training Hyperparameters](https://arxiv.org/abs/2406.11706)    
-[Feb'24] [Assisting in Writing Wikipedia-like Articles From Scratch with Large Language Models](https://arxiv.org/abs/2402.14207)         
-[Jan'24] [In-Context Learning for Extreme Multi-Label Classification](https://arxiv.org/abs/2401.12178)       
-[Dec'23] [DSPy Assertions: Computational Constraints for Self-Refining Language Model Pipelines](https://arxiv.org/abs/2312.13382)   
-[Dec'22] [Demonstrate-Search-Predict: Composing Retrieval & Language Models for Knowledge-Intensive NLP](https://arxiv.org/abs/2212.14024.pdf)
-
-To stay up to date or learn more, follow [@DSPyOSS](https://twitter.com/DSPyOSS) on Twitter or the DSPy page on LinkedIn.
-
-The **DSPy** logo is designed by **Chuyi Zhang**.
-
-If you use DSPy or DSP in a research paper, please cite our work as follows:
-
-```
+```bibtex
 @inproceedings{khattab2024dspy,
   title={DSPy: Compiling Declarative Language Model Calls into Self-Improving Pipelines},
   author={Khattab, Omar and Singhvi, Arnav and Maheshwari, Paridhi and Zhang, Zhiyuan and Santhanam, Keshav and Vardhamanan, Sri and Haq, Saiful and Sharma, Ashutosh and Joshi, Thomas T. and Moazam, Hanna and Miller, Heather and Zaharia, Matei and Potts, Christopher},
   journal={The Twelfth International Conference on Learning Representations},
   year={2024}
 }
-@article{khattab2022demonstrate,
-  title={Demonstrate-Search-Predict: Composing Retrieval and Language Models for Knowledge-Intensive {NLP}},
-  author={Khattab, Omar and Santhanam, Keshav and Li, Xiang Lisa and Hall, David and Liang, Percy and Potts, Christopher and Zaharia, Matei},
-  journal={arXiv preprint arXiv:2212.14024},
-  year={2022}
-}
 ```
-
-<!-- You can also read more about the evolution of the framework from Demonstrate-Search-Predict to DSPy:
-
-* [**DSPy Assertions: Computational Constraints for Self-Refining Language Model Pipelines**](https://arxiv.org/abs/2312.13382)   (Academic Paper, Dec 2023) 
-* [**DSPy: Compiling Declarative Language Model Calls into Self-Improving Pipelines**](https://arxiv.org/abs/2310.03714) (Academic Paper, Oct 2023) 
-* [**Releasing DSPy, the latest iteration of the framework**](https://twitter.com/lateinteraction/status/1694748401374490946) (Twitter Thread, Aug 2023)
-* [**Releasing the DSP Compiler (v0.1)**](https://twitter.com/lateinteraction/status/1625231662849073160)  (Twitter Thread, Feb 2023)
-* [**Introducing DSP**](https://twitter.com/lateinteraction/status/1617953413576425472)  (Twitter Thread, Jan 2023)
-* [**Demonstrate-Search-Predict: Composing retrieval and language models for knowledge-intensive NLP**](https://arxiv.org/abs/2212.14024.pdf) (Academic Paper, Dec 2022) -->

@@ -306,7 +306,7 @@ def inspect_codex_runtime(
 @contextmanager
 def _isolated_codex_home() -> Iterator[Path]:
     source_home = resolve_codex_home()
-    with tempfile.TemporaryDirectory(prefix="dspy-codex-home-") as tmpdir:
+    with tempfile.TemporaryDirectory(prefix="dspy-local-codex-home-") as tmpdir:
         overlay = Path(tmpdir)
         for filename in ("auth.json", "models_cache.json", "version.json"):
             source = source_home / filename
@@ -708,7 +708,7 @@ def run_codex(
 
     if runtime.preferred_transport is None:
         raise CodexTransportError(
-            "No usable Codex transport is configured. Run scripts/dspy_codex_doctor.py first."
+            "No usable Codex transport is configured. Run scripts/dspy_local_codex_doctor.py first."
         )
 
     requested = runtime.requested_transport
@@ -768,7 +768,7 @@ async def arun_codex(
 
     if runtime.preferred_transport is None:
         raise CodexTransportError(
-            "No usable Codex transport is configured. Run scripts/dspy_codex_doctor.py first."
+            "No usable Codex transport is configured. Run scripts/dspy_local_codex_doctor.py first."
         )
 
     requested = runtime.requested_transport
@@ -1026,19 +1026,19 @@ class CodexLM(BaseLM):
         return self._to_response(result)
 
 
-def install_codex_skill(
+def install_dspy_local_skill(
     *,
     codex_home: str | Path | None = None,
     force_relink: bool = False,
 ) -> dict[str, str]:
-    source = Path(__file__).resolve().parents[2] / "skills" / "dspy-codex"
+    source = Path(__file__).resolve().parents[2] / "skills" / "dspy-local"
     if not source.exists():
         raise FileNotFoundError(f"Skill source not found: {source}")
 
     home = Path(codex_home).expanduser() if codex_home else resolve_codex_home()
     destination_root = home / "skills"
     destination_root.mkdir(parents=True, exist_ok=True)
-    destination = destination_root / "dspy-codex"
+    destination = destination_root / "dspy-local"
 
     if destination.is_symlink():
         if destination.resolve() == source.resolve():
@@ -1090,7 +1090,7 @@ __all__ = [
     "codex_cli_path",
     "credential_source",
     "inspect_codex_runtime",
-    "install_codex_skill",
+    "install_dspy_local_skill",
     "is_codex_model",
     "parse_codex_model",
     "probe_codex_runtime",

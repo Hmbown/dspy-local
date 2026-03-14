@@ -11,24 +11,24 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 try:
-    from dspy.clients.codex import install_codex_skill
+    from dspy.clients.codex import install_dspy_local_skill
 except ModuleNotFoundError as exc:
     missing = exc.name or "a required package"
     raise SystemExit(
         f"Missing Python dependency: {missing}. "
         "Run `uv sync --extra mcp --extra dev` once, or invoke this script with "
-        "`uv run python scripts/install_codex_skill.py`."
+        "`uv run python scripts/install_dspy_local_skill.py`."
     ) from exc
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Install the bundled dspy-codex skill into CODEX_HOME/skills.")
+    parser = argparse.ArgumentParser(description="Install the bundled dspy-local skill into CODEX_HOME/skills.")
     parser.add_argument("--codex-home", default=None)
     parser.add_argument("--force-relink", action="store_true")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
-    result = install_codex_skill(codex_home=args.codex_home, force_relink=args.force_relink)
+    result = install_dspy_local_skill(codex_home=args.codex_home, force_relink=args.force_relink)
     if args.json:
         print(json.dumps(result, indent=2))
     else:
