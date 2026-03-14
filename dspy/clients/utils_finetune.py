@@ -50,7 +50,7 @@ class GRPOStatus(TypedDict):
     current_model: str
     checkpoints: dict[str, str]
     last_checkpoint: str | None = None
-    pending_batch_ids: list[int] = []
+    pending_batch_ids: list[int] = []  # noqa: RUF012
 
 
 def infer_data_format(adapter: Adapter) -> str:

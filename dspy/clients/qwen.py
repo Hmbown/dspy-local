@@ -278,7 +278,7 @@ def _coerce_usage(usage: dict[str, Any] | None) -> dict[str, Any]:
         "total_tokens": total_tokens,
     }
     cached_tokens = usage.get("cache_read_input_tokens")
-    if isinstance(cached_tokens, (int, float)) and int(cached_tokens) > 0:
+    if isinstance(cached_tokens, int | float) and int(cached_tokens) > 0:
         normalized["prompt_tokens_details"] = {"cached_tokens": int(cached_tokens)}
     return normalized
 
@@ -590,7 +590,7 @@ class QwenLM(BaseLM):
                 canonical.pop(key, None)
         return canonical
 
-    def copy(self, **kwargs: Any) -> "QwenLM":
+    def copy(self, **kwargs: Any) -> QwenLM:
         stripped = {k: kwargs.pop(k) for k in list(kwargs) if k in self._CACHE_BUSTING_KWARGS}
         if stripped:
             logger.debug("QwenLM.copy(): stripped cache-busting kwargs %s (no effect on Qwen)", stripped)

@@ -219,7 +219,7 @@ def _read_cache_models(codex_home: Path) -> list[str]:
         if isinstance(visibility, str) and visibility.strip().lower() == "hidden":
             continue
         priority = item.get("priority")
-        rank = int(priority) if isinstance(priority, (int, float)) else 10_000
+        rank = int(priority) if isinstance(priority, int | float) else 10_000
         ordered.append((rank, slug.strip()))
 
     ordered.sort(key=lambda item: (item[0], item[1]))
@@ -416,7 +416,7 @@ def _coerce_usage(usage: dict[str, Any] | None) -> dict[str, Any]:
         "total_tokens": input_tokens + output_tokens,
     }
     cached_input_tokens = usage.get("cached_input_tokens")
-    if isinstance(cached_input_tokens, (int, float)) and int(cached_input_tokens) > 0:
+    if isinstance(cached_input_tokens, int | float) and int(cached_input_tokens) > 0:
         normalized["prompt_tokens_details"] = {"cached_tokens": int(cached_input_tokens)}
     return normalized
 
@@ -934,7 +934,7 @@ class CodexLM(BaseLM):
                 canonical.pop(key, None)
         return canonical
 
-    def copy(self, **kwargs: Any) -> "CodexLM":
+    def copy(self, **kwargs: Any) -> CodexLM:
         stripped = {k: kwargs.pop(k) for k in list(kwargs) if k in self._CACHE_BUSTING_KWARGS}
         if stripped:
             logger.debug("CodexLM.copy(): stripped cache-busting kwargs %s (no effect on Codex)", stripped)
