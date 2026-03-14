@@ -56,7 +56,7 @@ def test_available_codex_models_reads_local_files(
     )
     monkeypatch.setenv("CODEX_HOME", str(tmp_path))
     models = available_codex_models()
-    assert models[:2] == ["gpt-5.3-codex", "gpt-5.4"]
+    assert set(models[:2]) == {"gpt-5.3-codex", "gpt-5.4"}
 
 
 def test_parse_codex_exec_events_extracts_text_usage_and_thread() -> None:

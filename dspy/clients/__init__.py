@@ -6,6 +6,19 @@ import litellm
 
 from dspy.clients.base_lm import BaseLM, inspect_history
 from dspy.clients.cache import Cache
+from dspy.clients.claude import (
+    ClaudeLM,
+    ClaudeModelSpec,
+    ClaudeResult,
+    ClaudeRuntimeInfo,
+    ClaudeTransportError,
+    ClaudeUnsupportedFeatureError,
+    arun_claude,
+    arun_claude_cli,
+    inspect_claude_runtime,
+    probe_claude_runtime,
+    run_claude,
+)
 from dspy.clients.codex import (
     CodexLM,
     CodexModelSpec,
@@ -22,19 +35,9 @@ from dspy.clients.codex import (
     probe_codex_runtime,
     run_codex,
 )
-from dspy.clients.claude import (
-    ClaudeLM,
-    ClaudeModelSpec,
-    ClaudeResult,
-    ClaudeRuntimeInfo,
-    ClaudeTransportError,
-    ClaudeUnsupportedFeatureError,
-    arun_claude,
-    arun_claude_cli,
-    inspect_claude_runtime,
-    probe_claude_runtime,
-    run_claude,
-)
+from dspy.clients.embedding import Embedder
+from dspy.clients.lm import LM
+from dspy.clients.provider import Provider, TrainingJob
 from dspy.clients.qwen import (
     QwenLM,
     QwenModelSpec,
@@ -48,9 +51,6 @@ from dspy.clients.qwen import (
     probe_qwen_runtime,
     run_qwen,
 )
-from dspy.clients.embedding import Embedder
-from dspy.clients.lm import LM
-from dspy.clients.provider import Provider, TrainingJob
 
 logger = logging.getLogger(__name__)
 
